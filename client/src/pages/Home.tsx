@@ -4,7 +4,7 @@
  * accent; every other color exists to explain status or floor context.
  */
 import { useMemo, useRef, useState, type MouseEvent } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   ArrowUpRight,
   Check,
@@ -50,6 +50,8 @@ function severityClass(severity: IssueSeverity) {
 
 export default function Home() {
   const { issues, addIssue, resetDemoData, deleteIssue, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
+  const [location] = useLocation();
+  const readOnly = location === "/view";
   const [activeFloor, setActiveFloor] = useState("全部");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
@@ -70,7 +72,7 @@ export default function Home() {
   const selectedIssue = issues.find((issue) => issue.id === selectedId) ?? null;
 
   function handlePlanClick(event: MouseEvent<HTMLDivElement>) {
-    if (!drawMode || !stageRef.current) return;
+    if (!drawMode || !stageRef.current || readOnly) return;
     const bounds = stageRef.current.getBoundingClientRect();
     const x = Math.max(4, Math.min(96, ((event.clientX - bounds.left) / bounds.width) * 100));
     const y = Math.max(4, Math.min(96, ((event.clientY - bounds.top) / bounds.height) * 100));
@@ -147,10 +149,11 @@ export default function Home() {
             <div className="heading-actions">
               <button type="button" className="text-action" disabled={floorplanUploading} onClick={() => floorplanInputRef.current?.click()}><Upload size={15} />{floorplanUploading ? "上傳中…" : "上傳平面圖"}</button>
               <input ref={floorplanInputRef} type="file" accept="image/*" hidden onChange={handleFloorplanUpload} />
-              <button type="button" className="text-action" onClick={() => setShowReset(true)}><RotateCcw size={15} />重設示範資料</button>
+              {!readOnly && <><button type="button" className="text-action" onClick={() => setShowReset(true)}><RotateCcw size={15} />重設示範資料</button></>}
               <div className="legend"><span className="legend-pin" />{issues.length} 個標註</div>
               {floorplanUploadError && <span className="floorplan-upload-error" style={{ color: "#9f2d2d", fontSize: "10px" }}>{floorplanUploadError}</span>}
               {contextError && <span className="floorplan-upload-error" style={{ color: "#9f2d2d", fontSize: "10px" }}>{contextError}</span>}
+              {readOnly && <span className="text-action" style={{ fontSize: "11px", color: "#6b726c" }}>僅供瀏覽 · <Link href="/login" className="back-link">登入以編輯</Link></span>}
             </div>
           </div>
 
@@ -188,10 +191,16 @@ export default function Home() {
               <div className="plan-scale mono">N ↑ &nbsp; 0 1 2 3 4 5 m</div>
             </div>
             <div className="plan-footer">
-              <div className="plan-note"><MousePointer2 size={14} />點擊銅色定位釘查看問題；使用新增模式在圖面上建立紀錄。</div>
-              <button type="button" className={drawMode ? "draw-button is-active" : "draw-button"} onClick={() => setDrawMode((value) => !value)}>
-                {drawMode ? <X size={16} /> : <Plus size={16} />}{drawMode ? "取消新增" : "新增標註"}
-              </button>
+              {readOnly ? (
+                <div className="plan-note"><MapPin size={14} />僅供瀏覽模式，點擊定位釘查看問題詳情。登入後可編輯。</div>
+              ) : (
+                <>
+                  <div className="plan-note"><MousePointer2 size={14} />點擊銅色定位釘查看問題；使用新增模式在圖面上建立紀錄。</div>
+                  <button type="button" className={drawMode ? "draw-button is-active" : "draw-button"} onClick={() => setDrawMode((value) => !value)}>
+                    {drawMode ? <X size={16} /> : <Plus size={16} />}{drawMode ? "取消新增" : "新增標註"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -211,7 +220,7 @@ export default function Home() {
                 </div>
               )}
               <div className="issue-detail-bottom"><span className={`status-badge ${statusClass(selectedIssue.status)}`}><span />{statusLabel[selectedIssue.status]}</span><Link href={`/issues/${selectedIssue.id}`} className="card-link" onClick={() => setEnlargedPhoto(null)}>查看紀錄 <ArrowUpRight size={14} /></Link></div>
-              <button type="button" className="delete-button" onClick={() => setShowDeleteConfirm(selectedIssue.id)}><Trash2 size={14} />移除標註</button>
+              {!readOnly && <button type="button" className="delete-button" onClick={() => setShowDeleteConfirm(selectedIssue.id)}><Trash2 size={14} />移除標註</button>}
             </article>
           ) : (
             <div className="detail-placeholder"><MapPin size={24} /><p>點擊定位釘查看問題詳情</p></div>

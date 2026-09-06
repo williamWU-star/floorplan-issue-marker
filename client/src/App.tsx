@@ -8,15 +8,26 @@ import { IssuesProvider } from "./contexts/IssuesContext";
 import AdminControls from "./components/AdminControls";
 import Home from "./pages/Home";
 import IssueDetail from "./pages/IssueDetail";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ShareReport from "./pages/ShareReport";
+
+function ViewOnlyHome() {
+  return <Home />;
+}
 
 function AdminRouter() {
   const { session, loading } = useAuth();
   const path = window.location.pathname.replace(import.meta.env.BASE_URL, "/").replace(/\/$/, "") || "/";
   const isPublicShare = path.startsWith("/share/");
+  const isViewOnly = path === "/view";
+  const isLogin = path === "/login";
   if (loading) return <div className="not-found-page"><p className="eyebrow">SITE / TRACE</p><h1>正在開啟檢查檔案…</h1></div>;
-  return <WouterRouter base={import.meta.env.BASE_URL}><Switch><Route path="/share/:token" component={ShareReport} /><Route path="/" component={Home} /><Route path="/issues/:id" component={IssueDetail} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>{session && !isPublicShare && <AdminControls />}</WouterRouter>;
+  // Require login for editing; public share links and the read-only /view route are always open.
+  if (!session && !isPublicShare && !isViewOnly && !isLogin) {
+    return <Login />;
+  }
+  return <WouterRouter base={import.meta.env.BASE_URL}><Switch><Route path="/login" component={Login} /><Route path="/share/:token" component={ShareReport} /><Route path="/view" component={ViewOnlyHome} /><Route path="/" component={Home} /><Route path="/issues/:id" component={IssueDetail} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>{session && !isPublicShare && !isViewOnly && <AdminControls />}</WouterRouter>;
 }
 
 export default function App() {
