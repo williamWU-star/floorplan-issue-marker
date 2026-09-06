@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import imageCompression from "browser-image-compression";
+import { isHeic, heicTo } from "heic-to";
 import { rest, rpc, signStorageUrl, uploadStorageFile } from "@/lib/supabaseRest";
 
 export type IssueStatus = "待處理" | "處理中" | "已完成";
@@ -17,20 +17,20 @@ const statusToDb: Record<IssueStatus, string> = { 待處理: "pending", 處理�
 const dbToSeverity: Record<string, IssueSeverity> = { high: "高", medium: "中", low: "低" };
 const dbToStatus: Record<string, IssueStatus> = { pending: "待處理", in_progress: "處理中", done: "已完成" };
 
-const HEIC_MIME = ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"];
-function isHeic(file: File): boolean {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  return ["heic", "heif", "heicsequence"].includes(ext || "") || HEIC_MIME.includes(file.type);
-}
-
-/** Convert HEIC/HEIF files to JPEG so all browsers can render them. */
+/** Convert HEIC/HEIF files to JPEG so all browsers can render them.
+ * Uses heic-to's isHeic() which checks both file MIME type and magic bytes
+ * to correctly identify iPhone-produced HEIC/HEIF variants (heic, heix,
+ * hevc, hevx, mif1, msf1 etc.) — not just the file extension. */
 async function convertHeicIfNeeded(file: File): Promise<File> {
-  if (!isHeic(file)) return file;
-  return imageCompression(file, {
-    maxSizeMB: 5,
-    maxWidthOrHeight: 4096,
-    useWebWorker: true,
-    fileType: "image/jpeg",
+  if (!(await isHeic(file))) return file;
+  const blob = await heicTo({
+    blob: file,
+    type: "image/jpeg",
+    quality: 0.85,
+  });
+  return new File([blob], file.name.replace(/\.(heic|heif|heics)$/i, ".jpg"), {
+    type: "image/jpeg",
+    lastModified: Date.now(),
   });
 }
 
