@@ -60,7 +60,7 @@ function severityClass(severity: IssueSeverity) {
 }
 
 export default function Home() {
-  const { issues, addIssue, resetDemoData, floorplanUrl, uploadFloorplan } = useIssues();
+  const { issues, addIssue, resetDemoData, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
   const [, setLocation] = useLocation();
   const [activeFloor, setActiveFloor] = useState("全部");
   const [query, setQuery] = useState("");
@@ -69,6 +69,7 @@ export default function Home() {
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  const [floorplanUploadError, setFloorplanUploadError] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
   const floorplanInputRef = useRef<HTMLInputElement>(null);
   const [floorplanUploading, setFloorplanUploading] = useState(false);
@@ -106,10 +107,13 @@ export default function Home() {
     event.target.value = "";
     if (!file) return;
     setFloorplanUploading(true);
+    setFloorplanUploadError("");
     try {
       await uploadFloorplan(file, "1F");
     } catch (err) {
-      // Error is recorded in context's error state
+      const msg = err instanceof Error ? err.message : "平面圖上傳失敗";
+      console.error("[floorplan upload]", err);
+      setFloorplanUploadError(msg);
     } finally {
       setFloorplanUploading(false);
     }
@@ -165,6 +169,8 @@ export default function Home() {
               <input ref={floorplanInputRef} type="file" accept="image/*" hidden onChange={handleFloorplanUpload} />
               <button type="button" className="text-action" onClick={() => setShowReset(true)}><RotateCcw size={15} />重設示範資料</button>
               <div className="legend"><span className="legend-pin" />{issues.length} 個標註</div>
+              {floorplanUploadError && <span className="floorplan-upload-error" style={{ color: "#9f2d2d", fontSize: "10px" }}>{floorplanUploadError}</span>}
+              {contextError && <span className="floorplan-upload-error" style={{ color: "#9f2d2d", fontSize: "10px" }}>{contextError}</span>}
             </div>
           </div>
 
