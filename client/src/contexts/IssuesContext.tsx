@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import imageCompression from "browser-image-compression";
 import { rest, rpc, signStorageUrl, uploadStorageFile } from "@/lib/supabaseRest";
 
 export type IssueStatus = "待處理" | "處理中" | "已完成";
@@ -15,6 +16,23 @@ const severityToDb: Record<IssueSeverity, string> = { 高: "high", 中: "medium"
 const statusToDb: Record<IssueStatus, string> = { 待處理: "pending", 處理中: "in_progress", 已完成: "done" };
 const dbToSeverity: Record<string, IssueSeverity> = { high: "高", medium: "中", low: "低" };
 const dbToStatus: Record<string, IssueStatus> = { pending: "待處理", in_progress: "處理中", done: "已完成" };
+
+const HEIC_MIME = ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"];
+function isHeic(file: File): boolean {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return ["heic", "heif", "heicsequence"].includes(ext || "") || HEIC_MIME.includes(file.type);
+}
+
+/** Convert HEIC/HEIF files to JPEG so all browsers can render them. */
+async function convertHeicIfNeeded(file: File): Promise<File> {
+  if (!isHeic(file)) return file;
+  return imageCompression(file, {
+    maxSizeMB: 5,
+    maxWidthOrHeight: 4096,
+    useWebWorker: true,
+    fileType: "image/jpeg",
+  });
+}
 
 async function loadProject() {
   return rpc<string>("get_or_create_public_project", {});
@@ -81,7 +99,14 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
       if (!projectId || !photo.url.startsWith("data:")) return;
       void (async () => { try { const comma = photo.url.indexOf(","); const meta = photo.url.slice(0, comma); const bytes = Uint8Array.from(atob(photo.url.slice(comma + 1)), (c) => c.charCodeAt(0)); const mime = meta.match(/data:([^;]+)/)?.[1] || "image/jpeg"; const file = new File([bytes], `${photo.id}.jpg`, { type: mime }); await uploadStorageFile("issue-photos", `${projectId}/${issueId}/${photo.id}.jpg`, file); const path = `${projectId}/${issueId}/${photo.id}.jpg`; await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: path, caption: photo.caption || file.name, uploaded_by: null }) }); await reload(); } catch (err) { setError(err instanceof Error ? err.message : "照片上傳失敗"); } })();
     },
-    addPhotoFile: async (issueId, file, caption) => { if (!projectId) throw new Error("尚未準備好專案"); const path = `${projectId}/${issueId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`; await uploadStorageFile("issue-photos", path, file); await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: path, caption: caption || file.name, uploaded_by: null }) }); await reload(); },
+    addPhotoFile: async (issueId, file, caption) => {
+      if (!projectId) throw new Error("尚未準備好專案");
+      const processedFile = await convertHeicIfNeeded(file);
+      const path = `${projectId}/${issueId}/${crypto.randomUUID()}-${processedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      await uploadStorageFile("issue-photos", path, processedFile);
+      await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: path, caption: caption || processedFile.name, uploaded_by: null }) });
+      await reload();
+    },
     addExternalPhoto: async (issueId, url, caption) => {
       if (!projectId) throw new Error("尚未準備好專案");
       const normalized = url.trim();
@@ -91,14 +116,15 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
     },
     uploadFloorplan: async (file, floorLabel = "1F") => {
       if (!projectId) throw new Error("尚未準備好專案");
+      const processedFile = await convertHeicIfNeeded(file);
       const floors = await rest(`/rest/v1/floors?select=id,label&project_id=eq.${projectId}&label=eq.${encodeURIComponent(floorLabel)}`) as DbFloor[];
       const floor = floors[0];
       if (!floor) throw new Error(`找不到樓層 ${floorLabel}`);
-      const path = `${projectId}/${floor.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      await uploadStorageFile("floorplan-assets", path, file);
+      const path = `${projectId}/${floor.id}/${crypto.randomUUID()}-${processedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      await uploadStorageFile("floorplan-assets", path, processedFile);
       let width: number | null = null;
       let height: number | null = null;
-      try { const bitmap = await createImageBitmap(file); width = bitmap.width; height = bitmap.height; } catch { /* ignore dimension extraction failure */ }
+      try { const bitmap = await createImageBitmap(processedFile); width = bitmap.width; height = bitmap.height; } catch { /* ignore dimension extraction failure */ }
       await rest("/rest/v1/floorplan_assets", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ floor_id: floor.id, storage_path: path, width, height, version: 1, created_by: null }) });
       await reload();
     },
