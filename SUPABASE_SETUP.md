@@ -1,6 +1,6 @@
 # Supabase 設定引導
 
-本 repository 已準備初始資料庫 migration 與私有 `issue-photos` Storage bucket。完成本文件後，Supabase 專案可以承接房屋專案、樓層、問題標註、照片 metadata 與事件歷程。
+本 repository 已準備初始資料庫 migration、私有 `issue-photos` Storage bucket 與公開報告分享的基礎 schema。管理者登入後可編輯與上傳；訪客持有分享連結即可免登入閱讀整份報告。
 
 > 目前網站介面仍使用瀏覽器 `localStorage`。本文件先把 Supabase 的資料庫與 Storage 基礎準備好；下一個開發步驟才會把 `IssuesContext` 改成 Supabase repository，並加入登入流程。不要在尚未整合前把 service key 放進 GitHub Pages。
 
@@ -36,9 +36,21 @@ issue_photos
 issue_events
 ```
 
-在 **Storage** 應該可以看到一個名為 `issue-photos` 的私有 bucket。不要把它改成 public；正式版本會以短效 signed URL 顯示照片。
+在 **Storage** 應該可以看到兩個 private bucket：`issue-photos` 用於現場照片，`floorplan-assets` 用於平面圖。不要把它們改成 public；公開報告會以短效 signed URL 顯示圖片。
 
-## 3. 設定本機環境變數
+## 3. 管理者登入與公開分享
+
+在 **Authentication → Providers** 開啟 **Email**。管理者使用 Email magic link 登入，不需要在網站建立或保存密碼。
+
+公開分享不是把整個資料庫或 bucket 設成 public。管理者建立一組不可猜測的分享 token，資料庫只保存 token 的 SHA-256 hash；訪客使用下列形式的連結查看整份報告：
+
+```text
+https://<github-pages-domain>/share/<token>
+```
+
+分享頁只允許讀取，不顯示編輯、刪除或上傳功能。管理者停用分享後，舊連結立即失效。任何取得連結的人都能查看該報告與所有照片，因此不要把連結放在不希望公開的地方。
+
+## 4. 設定本機環境變數
 
 在本機專案根目錄建立未追蹤的 `.env.local`，再填入：
 
@@ -49,7 +61,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
 
 `.env.local` 不應提交到 GitHub。只把 `VITE_SUPABASE_URL` 與 publishable／anon public key 放入前端；不要把 `service_role` key 放入任何 `VITE_` 變數。
 
-## 4. 建議的免費方案防護設定
+## 5. 建議的免費方案防護設定
 
 Supabase Free Plan 的 Storage quota 有限，因此建議在正式整合照片上傳時採用以下規則：
 
@@ -64,7 +76,7 @@ Supabase Free Plan 的 Storage quota 有限，因此建議在正式整合照片�
 
 上傳前應在瀏覽器壓縮照片，並在 Edge Function 或受保護的 server-side handler 再驗證 MIME type 與大小。只在 UI 限制檔案大小並不足夠。
 
-## 5. 下一步整合順序
+## 6. 下一步整合順序
 
 ### 第一步：安裝 Supabase client
 
@@ -76,7 +88,7 @@ pnpm add @supabase/supabase-js
 
 ### 第二步：加入登入
 
-先完成 Email magic link 或 OAuth 登入，登入完成後才允許讀寫 project data。未登入者可以看到靜態介紹頁，但不能讀取私有專案與照片。
+先完成 Email magic link 登入。登入後允許管理者讀寫自己的 project data；未登入者不進入管理頁，只能透過有效的公開分享 token 查看整份報告。
 
 ### 第三步：替換 localStorage repository
 
@@ -99,7 +111,27 @@ projects/{project_id}/issues/{issue_id}/photos/{photo_id}.webp
 
 資料庫的 `issue_photos.storage_path` 只保存 path 與 metadata。讀取照片時取得短效 signed URL；不要把 private bucket 改成 public，也不要把圖片 base64 存入 PostgreSQL。
 
-## 6. GitHub Pages 部署注意事項
+## 7. 公開報告 Edge Function
+
+`supabase/functions/public-report/index.ts` 是公開分享的 server-side 範本。它使用 Supabase service role key 查詢有效 token、組合整份報告，並為私有照片產生 1 小時有效的 signed URL。service role key 只能留在 Supabase Edge Function 的 server-side secrets，絕不能放進 GitHub Pages 或前端 JavaScript。
+
+部署前，請在 Supabase CLI 登入並連結 project，然後部署 function：
+
+```bash
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+supabase functions deploy public-report --no-verify-jwt
+```
+
+部署後，公開 endpoint 會類似：
+
+```text
+https://YOUR_PROJECT_REF.supabase.co/functions/v1/public-report?token=YOUR_SHARE_TOKEN
+```
+
+前端公開頁會呼叫這個 endpoint，而不是直接讓訪客查詢資料表。建立、更新與撤銷分享 token 的操作則必須由已登入的管理者執行。
+
+## 8. GitHub Pages 部署注意事項
 
 GitHub Pages 的前端只需要 public URL 與 publishable／anon public key。若之後用 GitHub Actions 建置時需要這些值，可以在 repository 的 **Settings → Secrets and variables → Actions** 加入：
 
@@ -110,16 +142,19 @@ VITE_SUPABASE_ANON_KEY
 
 但請注意：`VITE_` 變數會被打包進瀏覽器 JavaScript，publishable／anon key 本來就不是秘密；真正的安全邊界是 RLS。任何 service role key、資料庫密碼或 Storage 管理 key 都不能放入 GitHub Actions 的公開 build artifact，也不能放進前端。
 
-## 7. 驗證清單
+## 9. 驗證清單
 
 完成設定後，請確認：
 
-- 可在 Auth 中建立測試帳號並完成登入。
+- 可在 Auth 中寄出 magic link，點擊後完成管理者登入。
 - SQL Editor 中的 migration 無錯誤完成。
-- `issue-photos` bucket 是 private。
+- `issue-photos` 與 `floorplan-assets` bucket 都是 private。
 - `project_members` 的 owner／editor／viewer policy 只允許預期操作。
 - 非專案成員無法查詢 `projects`、`issues` 或 `issue_photos`。
 - 直接貼上 Storage object URL 時無法繞過 private bucket。
 - 照片單檔上限與應用層容量警戒線均已啟用。
+- 有效分享 token 可以免登入讀取整份報告與照片。
+- 錯誤或已撤銷的 token 回傳無效分享連結，不洩漏報告資料。
+- 公開頁沒有任何建立、修改、刪除或上傳操作。
 
 完成上述步驟後，請把 Supabase **Project URL** 提供給下一階段整合使用；publishable／anon key 可以在本機 `.env.local` 中設定，不需要貼到對話裡。不要提供 service role key。

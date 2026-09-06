@@ -1,0 +1,4 @@
+# Supabase project configuration
+# The public-report function authenticates visitors with a random share token.
+[functions.public-report]
+verify_jwt = false

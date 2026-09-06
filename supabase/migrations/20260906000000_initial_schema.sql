@@ -241,3 +241,43 @@ using (
   bucket_id = 'issue-photos'
   and public.project_role(public.safe_uuid((storage.foldername(name))[2])) in ('owner', 'editor')
 );
+
+-- Public, unlisted report sharing. Store only a SHA-256 token hash.
+alter table public.projects
+  add column if not exists share_enabled boolean not null default false,
+  add column if not exists share_token_hash text unique,
+  add column if not exists share_created_at timestamptz,
+  add column if not exists share_revoked_at timestamptz;
+
+create index if not exists projects_share_token_hash_idx on public.projects(share_token_hash)
+where share_enabled = true;
+
+-- A separate private bucket keeps floor plans distinct from field photos.
+insert into storage.buckets (id, name, public)
+values ('floorplan-assets', 'floorplan-assets', false)
+on conflict (id) do update set public = excluded.public;
+
+drop policy if exists floorplan_assets_storage_select on storage.objects;
+create policy floorplan_assets_storage_select on storage.objects for select to authenticated
+using (
+  bucket_id = 'floorplan-assets'
+  and public.is_project_member(public.safe_uuid((storage.foldername(name))[2]))
+);
+
+drop policy if exists floorplan_assets_storage_insert on storage.objects;
+create policy floorplan_assets_storage_insert on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'floorplan-assets'
+  and public.project_role(public.safe_uuid((storage.foldername(name))[2])) in ('owner', 'editor')
+);
+
+drop policy if exists floorplan_assets_storage_delete on storage.objects;
+create policy floorplan_assets_storage_delete on storage.objects for delete to authenticated
+using (
+  bucket_id = 'floorplan-assets'
+  and public.project_role(public.safe_uuid((storage.foldername(name))[2])) in ('owner', 'editor')
+);
+
+-- Public visitors never query these tables directly. A public-report Edge Function
+-- validates the unguessable token and returns only the selected report plus short-lived
+-- signed photo URLs. Keep share_token_hash out of all public response payloads.
