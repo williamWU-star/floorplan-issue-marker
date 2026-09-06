@@ -41,13 +41,16 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
     issues, loading, error, projectId,
     addIssue: (input) => {
       const temporary: Issue = { ...input, id: `pending-${Date.now()}`, code: `${input.floor}-NEW`, createdAt: new Date().toISOString().slice(0, 10), photos: [] };
+      setIssues((list) => [temporary, ...list]);
       if (!projectId) return temporary;
       void (async () => { try {
         const floors = await rest(`/rest/v1/floors?select=id,label&project_id=eq.${projectId}&label=eq.${encodeURIComponent(input.floor)}`) as DbFloor[]; const floor = floors[0]; if (!floor) throw new Error("找不到樓層");
-        const existing = await rest(`/rest/v1/issues?select=code&project_id=eq.${projectId}&order=created_at.desc&limit=1`) as { code: string }[];
-        const last = existing[0]?.code?.match(/(\d+)$/); const number = last ? Number(last[1]) + 1 : issues.length + 1; const prefix = input.floor === "1F" ? "F1" : input.floor === "2F" ? "F2" : "F3"; const code = `${prefix}-${String(number).padStart(3, "0")}`;
+        const existing = await rest(`/rest/v1/issues?select=code&project_id=eq.${projectId}`) as { code: string }[];
+        const prefix = input.floor === "1F" ? "F1" : input.floor === "2F" ? "F2" : "F3";
+        const nextNumber = existing.reduce((max, row) => { const match = row.code?.match(new RegExp(`^${prefix}-(\\d+)$`)); return match ? Math.max(max, Number(match[1])) : max; }, 0) + 1;
+        const code = `${prefix}-${String(nextNumber).padStart(3, "0")}`;
         await rest("/rest/v1/issues", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ project_id: projectId, floor_id: floor.id, code, title: input.title, location: input.location, x: input.x / 100, y: input.y / 100, severity: severityToDb[input.severity], status: "pending", description: input.description, created_by: null }) }); await reload();
-      } catch (err) { setError(err instanceof Error ? err.message : "新增標註失敗"); } })();
+      } catch (err) { setIssues((list) => list.filter((item) => item.id !== temporary.id)); setError(err instanceof Error ? err.message : "新增標註失敗"); } })();
       return temporary;
     },
     updateIssue: (id, patch) => { const current = issues.find((item) => item.id === id); setIssues((list) => list.map((item) => item.id === id ? { ...item, ...patch } : item)); if (!current || !projectId) return; void (async () => { const body: Record<string, unknown> = {}; if (patch.title !== undefined) body.title = patch.title; if (patch.location !== undefined) body.location = patch.location; if (patch.description !== undefined) body.description = patch.description; if (patch.x !== undefined) body.x = patch.x / 100; if (patch.y !== undefined) body.y = patch.y / 100; if (patch.severity !== undefined) body.severity = severityToDb[patch.severity]; if (patch.status !== undefined) body.status = statusToDb[patch.status]; if (Object.keys(body).length) await rest(`/rest/v1/issues?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(body) }); })().catch((err) => setError(err instanceof Error ? err.message : "更新失敗")); },
