@@ -12,9 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useIssues, type IssueSeverity, type IssueStatus } from "@/contexts/IssuesContext";
+import { LOGO_URL, FLOORPLAN_URL } from "@/const";
 
-const FLOORPLAN_URL = "/assets/floorplan-house.png";
-const LOGO_URL = "/assets/surveyor-mark.png";
 const statusOptions: IssueStatus[] = ["待處理", "處理中", "已完成"];
 const severityOptions: IssueSeverity[] = ["高", "中", "低"];
 

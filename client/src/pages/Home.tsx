@@ -22,9 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useIssues, type Issue, type IssuePhoto, type IssueSeverity, type IssueStatus } from "@/contexts/IssuesContext";
-
-const FLOORPLAN_URL = "/assets/floorplan-house.png";
-const LOGO_URL = "/assets/surveyor-mark.png";
+import { LOGO_URL, FLOORPLAN_URL } from "@/const";
 
 const statusLabel: Record<IssueStatus, string> = {
   待處理: "待處理",

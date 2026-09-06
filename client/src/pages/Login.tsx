@@ -1,8 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Mail, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-
-const LOGO_URL = "/assets/surveyor-mark.png";
+import { LOGO_URL } from "@/const";
 
 export default function Login() {
   const { signInWithEmail } = useAuth();
