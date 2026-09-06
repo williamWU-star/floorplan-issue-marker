@@ -3,6 +3,7 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export type Session = { access_token: string; refresh_token: string; expires_at?: number; user: { id: string; email?: string } };
 const SESSION_KEY = "site-trace-session";
+const PUBLIC_SITE_URL = "https://williamwu-star.github.io/floorplan-issue-marker/";
 
 function requireConfig() { if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error("尚未設定 Supabase 網站環境變數"); }
 export function getSession(): Session | null { try { const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) as Session : null; } catch { return null; } }
@@ -13,7 +14,7 @@ async function supabaseFetch(path: string, init: RequestInit = {}, accessToken?:
   const response = await fetch(`${SUPABASE_URL}${path}`, { ...init, headers }); const text = await response.text(); let body: any = null; try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   if (!response.ok) throw new Error(body?.message || body?.error_description || body?.error || `Supabase request failed (${response.status})`); return body;
 }
-export async function requestMagicLink(email: string) { const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`; await supabaseFetch("/auth/v1/otp", { method: "POST", body: JSON.stringify({ email, create_user: true, options: { email_redirect_to: redirectTo } }) }); }
+export async function requestMagicLink(email: string) { await supabaseFetch("/auth/v1/otp", { method: "POST", body: JSON.stringify({ email, create_user: true, options: { email_redirect_to: PUBLIC_SITE_URL } }) }); }
 export async function consumeAuthRedirect() {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash; if (!hash) return getSession(); const params = new URLSearchParams(hash); const accessToken = params.get("access_token"); const refreshToken = params.get("refresh_token"); if (!accessToken || !refreshToken) return getSession();
   const session: Session = { access_token: accessToken, refresh_token: refreshToken, expires_at: Number(params.get("expires_at") || 0) || undefined, user: { id: "" } }; const user = await supabaseFetch("/auth/v1/user", {}, accessToken); session.user = { id: user.id, email: user.email }; saveSession(session); history.replaceState(null, "", window.location.pathname + window.location.search); return session;
