@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import imageCompression from "browser-image-compression";
+import { isHeic, heicTo } from "heic-to";
 import { rest, rpc, signStorageUrl, uploadStorageFile } from "@/lib/supabaseRest";
 
 export type IssueStatus = "待處理" | "處理中" | "已完成";
@@ -17,51 +17,21 @@ const statusToDb: Record<IssueStatus, string> = { 待處理: "pending", 處理�
 const dbToSeverity: Record<string, IssueSeverity> = { high: "高", medium: "中", low: "低" };
 const dbToStatus: Record<string, IssueStatus> = { pending: "待處理", in_progress: "處理中", done: "已完成" };
 
-const HEIC_MIME = ["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"];
-function isHeic(file: File): boolean {
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  return ["heic", "heif", "heicsequence"].includes(ext || "") || HEIC_MIME.includes(file.type.toLowerCase());
-}
-
-let heic2anyLoader: Promise<(options: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]>> | null = null;
-
-async function loadHeic2Any() {
-  if (!heic2anyLoader) {
-    heic2anyLoader = new Promise((resolve, reject) => {
-      const existing = document.querySelector<HTMLScriptElement>('script[data-heic2any="true"]');
-      if (existing) {
-        const api = (window as Window & { heic2any?: (options: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]> }).heic2any;
-        if (api) resolve(api);
-        else existing.addEventListener("load", () => {
-          const loaded = (window as Window & { heic2any?: typeof api }).heic2any;
-          loaded ? resolve(loaded) : reject(new Error("HEIC 轉換元件載入失敗"));
-        }, { once: true });
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
-      script.async = true;
-      script.dataset.heic2any = "true";
-      script.onload = () => {
-        const api = (window as Window & { heic2any?: (options: { blob: Blob; toType: string; quality?: number }) => Promise<Blob | Blob[]> }).heic2any;
-        api ? resolve(api) : reject(new Error("HEIC 轉換元件載入失敗"));
-      };
-      script.onerror = () => reject(new Error("無法載入 HEIC 轉換元件，請確認網路連線後重試。"));
-      document.head.appendChild(script);
-    });
-  }
-  return heic2anyLoader;
-}
-
-/** Convert HEIC/HEIF to JPEG first; browser-image-compression alone cannot decode HEIC in Chrome. */
+/** Convert HEIC/HEIF files to JPEG so all browsers can render them.
+ * Uses heic-to's isHeic() which checks both file MIME type and magic bytes
+ * to correctly identify iPhone-produced HEIC/HEIF variants (heic, heix,
+ * hevc, hevx, mif1, msf1 etc.) — not just the file extension. */
 async function convertHeicIfNeeded(file: File): Promise<File> {
-  if (!isHeic(file)) return file;
-  const heic2any = await loadHeic2Any();
-  const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
-  const blob = Array.isArray(converted) ? converted[0] : converted;
-  const baseName = file.name.replace(/\.(heic|heif)$/i, "");
-  const jpegFile = new File([blob], `${baseName || "photo"}.jpg`, { type: "image/jpeg" });
-  return imageCompression(jpegFile, { maxSizeMB: 5, maxWidthOrHeight: 4096, useWebWorker: true, fileType: "image/jpeg" });
+  if (!(await isHeic(file))) return file;
+  const blob = await heicTo({
+    blob: file,
+    type: "image/jpeg",
+    quality: 0.85,
+  });
+  return new File([blob], file.name.replace(/\.(heic|heif|heics)$/i, ".jpg"), {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
 }
 
 async function loadProject() {
@@ -90,6 +60,7 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
       }
       setIssues(rows.map((row) => mapIssue(row, floorMap, grouped.get(row.id) || [])));
 
+      // Load the latest floorplan asset for this project
       const assetRows = floors.length ? await rest(`/rest/v1/floorplan_assets?select=id,floor_id,storage_path,width,height,version,created_at&floor_id=in.(${floors.map((f) => f.id).join(",")})&order=created_at.desc`) as DbFloorplanAsset[] : [];
       if (assetRows.length > 0) {
         const latest = assetRows[0];
