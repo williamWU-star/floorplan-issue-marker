@@ -15,6 +15,7 @@ import {
   MousePointer2,
   Plus,
   RotateCcw,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -50,7 +51,7 @@ function severityClass(severity: IssueSeverity) {
 }
 
 export default function Home() {
-  const { issues, addIssue, resetDemoData, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
+  const { issues, addIssue, resetDemoData, deleteIssue, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
   const [activeFloor, setActiveFloor] = useState("全部");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
@@ -59,6 +60,7 @@ export default function Home() {
   const [showReset, setShowReset] = useState(false);
   const [floorplanUploadError, setFloorplanUploadError] = useState("");
   const [enlargedPhoto, setEnlargedPhoto] = useState<IssuePhoto | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const floorplanInputRef = useRef<HTMLInputElement>(null);
   const [floorplanUploading, setFloorplanUploading] = useState(false);
@@ -211,6 +213,7 @@ export default function Home() {
                 </div>
               )}
               <div className="issue-detail-bottom"><span className={`status-badge ${statusClass(selectedIssue.status)}`}><span />{statusLabel[selectedIssue.status]}</span><Link href={`/issues/${selectedIssue.id}`} className="card-link" onClick={() => setEnlargedPhoto(null)}>查看紀錄 <ArrowUpRight size={14} /></Link></div>
+              <button type="button" className="delete-button" onClick={() => setShowDeleteConfirm(selectedIssue.id)}><Trash2 size={14} />移除標註</button>
             </article>
           ) : (
             <div className="detail-placeholder"><MapPin size={24} /><p>點擊定位釘查看問題詳情</p></div>
@@ -263,6 +266,15 @@ export default function Home() {
           <div className="confirm-sheet" role="dialog" aria-modal="true">
             <p className="eyebrow">RESET DEMO / 00</p><h2>回復示範紀錄？</h2><p>這會移除目前瀏覽器中的新增標註與照片，回到初始示範資料。</p>
             <div className="form-actions"><Button variant="outline" onClick={() => setShowReset(false)}>保留目前紀錄</Button><Button className="danger-button" onClick={() => { resetDemoData(); setShowReset(false); setSelectedId(null); }}>回復示範資料</Button></div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm !== null && (
+        <div className="modal-backdrop" role="presentation">
+          <div className="confirm-sheet" role="dialog" aria-modal="true">
+            <p className="eyebrow">DELETE / 00</p><h2>移除此問題標註？</h2><p>此操作會刪除標註及其所有照片，無法復原。</p>
+            <div className="form-actions"><Button variant="outline" onClick={() => setShowDeleteConfirm(null)}>取消</Button><Button className="danger-button" onClick={() => { deleteIssue(showDeleteConfirm); setShowDeleteConfirm(null); setSelectedId(null); }}>移除</Button></div>
           </div>
         </div>
       )}
