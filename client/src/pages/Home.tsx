@@ -51,7 +51,7 @@ function severityClass(severity: IssueSeverity) {
 export default function Home() {
   const { issues, addIssue, resetDemoData, deleteIssue, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
   const [location] = useLocation();
-  const readOnly = location === "/view";
+  const readOnly = location === "/view" || new URLSearchParams(window.location.search).get("view") === "1";
   const [activeFloor, setActiveFloor] = useState("全部");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);

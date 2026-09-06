@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Mail, CheckCircle2 } from "lucide-react";
+import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { LOGO_URL } from "@/const";
 
@@ -25,7 +26,7 @@ export default function Login() {
       <main className="not-found-page" style={{ maxWidth: 620 }}>
         <p className="eyebrow">ADMIN ACCESS / 00</p>
         <h1>登入檢查檔案</h1>
-        <p>管理者登入後才能新增、編輯問題與上傳現場照片。閱覽者不需要登入，使用分享連結即可查看。</p>
+        <p>管理者登入後才能新增、編輯問題與上傳現場照片。閱覽者不需要登入，<Link href="/?view=1">純瀏覽模式</Link>即可查看。</p>
         {sent ? (
           <div className="note-card accent-note"><div className="note-card-mark"><CheckCircle2 size={18} /></div><div><strong>登入連結已寄出</strong><p>請打開信箱中的登入連結。完成後會自動回到這個檢查檔案。</p></div></div>
         ) : (
