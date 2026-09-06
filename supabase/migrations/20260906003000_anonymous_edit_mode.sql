@@ -2,8 +2,6 @@
 -- allow the site owner to edit/upload without email login.
 -- Re-tighten these policies and restore auth-bound created_by/uploaded_by later.
 
-alter table public.profiles alter column id drop not null;
-
 alter table public.projects alter column created_by drop not null;
 alter table public.floorplan_assets alter column created_by drop not null;
 alter table public.issues alter column created_by drop not null;
