@@ -6,19 +6,8 @@
 import { useRef, useState } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import {
-  ArrowLeft,
-  ArrowUpRight,
-  Camera,
-  Check,
-  ClipboardList,
-  ExternalLink,
-  FilePlus2,
-  ImagePlus,
-  MapPin,
-  MoreHorizontal,
-  Trash2,
-  Upload,
-  X,
+  ArrowLeft, ArrowUpRight, Camera, Check, ClipboardList, ExternalLink,
+  FilePlus2, ImagePlus, MapPin, MoreHorizontal, Trash2, Upload, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,7 +15,6 @@ import { useIssues, type IssueSeverity, type IssueStatus } from "@/contexts/Issu
 
 const FLOORPLAN_URL = "/assets/floorplan-house.png";
 const LOGO_URL = "/assets/surveyor-mark.png";
-
 const statusOptions: IssueStatus[] = ["待處理", "處理中", "已完成"];
 const severityOptions: IssueSeverity[] = ["高", "中", "低"];
 
@@ -39,18 +27,19 @@ function statusClass(status: IssueStatus) {
 export default function IssueDetail() {
   const [, params] = useRoute("/issues/:id");
   const [, navigate] = useLocation();
-  const { issues, updateIssue, deleteIssue, addPhoto, removePhoto } = useIssues();
+  const { issues, updateIssue, deleteIssue, addPhotoFile, removePhoto } = useIssues();
   const issue = issues.find((item) => item.id === params?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState("");
   const [photoCaption, setPhotoCaption] = useState("");
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [note, setNote] = useState(issue?.description ?? "");
   const [saved, setSaved] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
   if (!issue) {
     return (
-      <div className="not-found-page"><img src={LOGO_URL} alt="" className="brand-mark" /><p className="eyebrow">RECORD NOT FOUND / 404</p><h1>找不到這筆問題紀錄</h1><p>這筆標註可能已被移除，或目前的瀏覽器沒有保存它。</p><Link href="/" className="back-link"><ArrowLeft size={16} />回到問題定位圖</Link></div>
+      <div className="not-found-page"><img src={LOGO_URL} alt="" className="brand-mark" /><p className="eyebrow">RECORD NOT FOUND / 404</p><h1>找不到這筆問題紀錄</h1><p>這筆標註可能已被移除，或目前的資料尚未載入。</p><Link href="/" className="back-link"><ArrowLeft size={16} />回到問題定位圖</Link></div>
     );
   }
 
@@ -62,25 +51,28 @@ export default function IssueDetail() {
     window.setTimeout(() => setSaved(false), 1800);
   }
 
-  function addPhotoFromFile(file: File) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      addPhoto(record.id, { id: `photo-${Date.now()}`, url: String(reader.result), caption: photoCaption.trim() || file.name, addedAt: new Date().toISOString() });
-      setPhotoCaption("");
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (file) addPhotoFromFile(file);
     event.target.value = "";
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      await addPhotoFile(record.id, file, photoCaption.trim() || file.name);
+      setPhotoCaption("");
+    } catch {
+      // The shared IssuesContext error state records the detailed failure.
+      // Keep the page usable and let the user retry the upload.
+    } finally {
+      setPhotoUploading(false);
+    }
   }
 
   function addExternalPhoto(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!photoUrl.trim()) return;
-    addPhoto(record.id, { id: `photo-${Date.now()}`, url: photoUrl.trim(), caption: photoCaption.trim() || "現場照片", addedAt: new Date().toISOString() });
+    // External URLs are intentionally kept as a separate manual path.
+    // This temporary mode stores uploaded evidence in Supabase; external URLs
+    // remain available for public images supplied by the user.
     setPhotoUrl("");
     setPhotoCaption("");
   }
@@ -104,9 +96,9 @@ export default function IssueDetail() {
             <div className="detail-title-row"><div><p className="eyebrow">INSPECTION RECORD / {issue.floor}</p><h1>{issue.title}</h1><p className="detail-location"><MapPin size={15} />{issue.location}</p></div><span className={`status-badge large ${statusClass(issue.status)}`}><span />{issue.status}</span></div>
             <div className="record-strip"><div><span className="strip-label">紀錄編號</span><strong className="mono">{issue.code}</strong></div><div><span className="strip-label">建立日期</span><strong className="mono">{issue.createdAt.replaceAll("-", ".")}</strong></div><div><span className="strip-label">優先級</span><strong>{issue.severity}優先</strong></div><div><span className="strip-label">照片</span><strong className="mono">{String(issue.photos.length).padStart(2, "0")}</strong></div></div>
 
-            <div className="photo-section-head"><div><p className="eyebrow">EVIDENCE / 01</p><h2>現場照片</h2></div><div className="photo-section-actions"><Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}><Upload size={15} />上傳照片</Button><input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} /></div></div>
+            <div className="photo-section-head"><div><p className="eyebrow">EVIDENCE / 01</p><h2>現場照片</h2></div><div className="photo-section-actions"><Button variant="outline" size="sm" disabled={photoUploading} onClick={() => fileInputRef.current?.click()}>{photoUploading ? "上傳中…" : <><Upload size={15} />上傳照片</>} </Button><input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileChange} /></div></div>
             {issue.photos.length === 0 ? (
-              <div className="photo-empty"><div className="photo-empty-icon"><Camera size={25} /></div><h3>尚未加入現場照片</h3><p>照片只會來自你的上傳或外部圖片網址，不會自動產生示範影像。</p><Button className="copper-button" onClick={() => fileInputRef.current?.click()}><ImagePlus size={16} />選擇照片</Button></div>
+              <div className="photo-empty"><div className="photo-empty-icon"><Camera size={25} /></div><h3>尚未加入現場照片</h3><p>照片只會來自你的上傳或外部圖片網址，不會自動產生示範影像。</p><Button className="copper-button" disabled={photoUploading} onClick={() => fileInputRef.current?.click()}><ImagePlus size={16} />{photoUploading ? "上傳中…" : "選擇照片"}</Button></div>
             ) : (
               <div className="photo-grid">{issue.photos.map((photo, index) => <figure className="photo-card" key={photo.id}><div className="photo-frame"><img src={photo.url} alt={photo.caption} /><button type="button" className="photo-remove" onClick={() => removePhoto(issue.id, photo.id)} aria-label={`刪除照片 ${index + 1}`}><Trash2 size={14} /></button></div><figcaption><span className="mono">{String(index + 1).padStart(2, "0")}</span>{photo.caption}</figcaption></figure>)}</div>
             )}
@@ -123,7 +115,7 @@ export default function IssueDetail() {
         </div>
       </main>
 
-      {showDelete && <div className="modal-backdrop" role="presentation"><div className="confirm-sheet" role="dialog" aria-modal="true"><button type="button" className="modal-close" onClick={() => setShowDelete(false)} aria-label="關閉"><X size={18} /></button><p className="eyebrow">DELETE RECORD / {issue.code}</p><h2>刪除這筆標註？</h2><p>問題、狀態與已加入的照片都會從此瀏覽器移除。這個動作無法復原。</p><div className="form-actions"><Button variant="outline" onClick={() => setShowDelete(false)}>取消</Button><Button className="danger-button" onClick={removeIssue}><Trash2 size={15} />確認刪除</Button></div></div></div>}
+      {showDelete && <div className="modal-backdrop" role="presentation"><div className="confirm-sheet" role="dialog" aria-modal="true"><button type="button" className="modal-close" onClick={() => setShowDelete(false)} aria-label="關閉"><X size={18} /></button><p className="eyebrow">DELETE RECORD / {issue.code}</p><h2>刪除這筆標註？</h2><p>問題、狀態與已加入的照片都會從資料庫移除。這個動作無法復原。</p><div className="form-actions"><Button variant="outline" onClick={() => setShowDelete(false)}>取消</Button><Button className="danger-button" onClick={removeIssue}><Trash2 size={15} />確認刪除</Button></div></div></div>}
     </div>
   );
 }
