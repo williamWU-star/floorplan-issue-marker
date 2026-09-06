@@ -8,7 +8,7 @@ export type Issue = { id: string; code: string; title: string; floor: string; lo
 type DbIssue = { id: string; code: string; title: string; location: string | null; x: number; y: number; severity: string; status: string; description: string | null; created_at: string; floor_id: string };
 type DbFloor = { id: string; label: string };
 type DbPhoto = { id: string; issue_id: string; storage_path: string; caption: string | null; created_at: string };
-type IssuesContextValue = { issues: Issue[]; loading: boolean; error: string | null; projectId: string | null; addIssue: (input: Omit<Issue, "id" | "code" | "createdAt" | "photos">) => Issue; updateIssue: (id: string, patch: Partial<Issue>) => void; deleteIssue: (id: string) => void; addPhoto: (issueId: string, photo: IssuePhoto) => void; addPhotoFile: (issueId: string, file: File, caption?: string) => Promise<void>; removePhoto: (issueId: string, photoId: string) => void; resetDemoData: () => Promise<void>; reload: () => Promise<void> };
+type IssuesContextValue = { issues: Issue[]; loading: boolean; error: string | null; projectId: string | null; addIssue: (input: Omit<Issue, "id" | "code" | "createdAt" | "photos">) => Issue; updateIssue: (id: string, patch: Partial<Issue>) => void; deleteIssue: (id: string) => void; addPhoto: (issueId: string, photo: IssuePhoto) => void; addPhotoFile: (issueId: string, file: File, caption?: string) => Promise<void>; addExternalPhoto: (issueId: string, url: string, caption?: string) => Promise<void>; removePhoto: (issueId: string, photoId: string) => void; resetDemoData: () => Promise<void>; reload: () => Promise<void> };
 const IssuesContext = createContext<IssuesContextValue | null>(null);
 const severityToDb: Record<IssueSeverity, string> = { 高: "high", 中: "medium", 低: "low" };
 const statusToDb: Record<IssueStatus, string> = { 待處理: "pending", 處理中: "in_progress", 已完成: "done" };
@@ -31,7 +31,14 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
       const rows = await rest(`/rest/v1/issues?select=id,code,title,location,x,y,severity,status,description,created_at,floor_id&project_id=eq.${pid}&order=created_at.desc`) as DbIssue[];
       const photoRows = rows.length ? await rest(`/rest/v1/issue_photos?select=id,issue_id,storage_path,caption,created_at&issue_id=in.(${rows.map((r) => r.id).join(",")})&order=created_at.asc`) as DbPhoto[] : [];
       const grouped = new Map<string, IssuePhoto[]>();
-      for (const photo of photoRows) { try { const url = await signStorageUrl("issue-photos", photo.storage_path, 3600); const list = grouped.get(photo.issue_id) || []; list.push({ id: photo.id, url, caption: photo.caption || "現場照片", addedAt: photo.created_at, storagePath: photo.storage_path }); grouped.set(photo.issue_id, list); } catch { /* ignore missing photo */ } }
+      for (const photo of photoRows) {
+        try {
+          const url = /^https?:\/\//i.test(photo.storage_path) ? photo.storage_path : await signStorageUrl("issue-photos", photo.storage_path, 3600);
+          const list = grouped.get(photo.issue_id) || [];
+          list.push({ id: photo.id, url, caption: photo.caption || "現場照片", addedAt: photo.created_at, storagePath: photo.storage_path });
+          grouped.set(photo.issue_id, list);
+        } catch { /* ignore missing photo */ }
+      }
       setIssues(rows.map((row) => mapIssue(row, floorMap, grouped.get(row.id) || [])));
     } catch (err) { setError(err instanceof Error ? err.message : "資料載入失敗"); } finally { setLoading(false); }
   };
@@ -60,7 +67,14 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
       void (async () => { try { const comma = photo.url.indexOf(","); const meta = photo.url.slice(0, comma); const bytes = Uint8Array.from(atob(photo.url.slice(comma + 1)), (c) => c.charCodeAt(0)); const mime = meta.match(/data:([^;]+)/)?.[1] || "image/jpeg"; const file = new File([bytes], `${photo.id}.jpg`, { type: mime }); await uploadStorageFile("issue-photos", `${projectId}/${issueId}/${photo.id}.jpg`, file); const path = `${projectId}/${issueId}/${photo.id}.jpg`; await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: path, caption: photo.caption || file.name, uploaded_by: null }) }); await reload(); } catch (err) { setError(err instanceof Error ? err.message : "照片上傳失敗"); } })();
     },
     addPhotoFile: async (issueId, file, caption) => { if (!projectId) throw new Error("尚未準備好專案"); const path = `${projectId}/${issueId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`; await uploadStorageFile("issue-photos", path, file); await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: path, caption: caption || file.name, uploaded_by: null }) }); await reload(); },
-    removePhoto: (issueId, photoId) => { const photo = issues.find((item) => item.id === issueId)?.photos.find((p) => p.id === photoId); setIssues((list) => list.map((item) => item.id === issueId ? { ...item, photos: item.photos.filter((p) => p.id !== photoId) } : item)); void (async () => { await rest(`/rest/v1/issue_photos?id=eq.${photoId}`, { method: "DELETE" }); if (photo?.storagePath) await rest(`/storage/v1/object/issue-photos/${photo.storagePath.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" }); })().catch((err) => setError(err instanceof Error ? err.message : "照片刪除失敗")); },
+    addExternalPhoto: async (issueId, url, caption) => {
+      if (!projectId) throw new Error("尚未準備好專案");
+      const normalized = url.trim();
+      if (!/^https?:\/\//i.test(normalized)) throw new Error("照片網址必須以 http:// 或 https:// 開頭");
+      await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: normalized, caption: caption?.trim() || "外部照片", uploaded_by: null }) });
+      await reload();
+    },
+    removePhoto: (issueId, photoId) => { const photo = issues.find((item) => item.id === issueId)?.photos.find((p) => p.id === photoId); setIssues((list) => list.map((item) => item.id === issueId ? { ...item, photos: item.photos.filter((p) => p.id !== photoId) } : item)); void (async () => { await rest(`/rest/v1/issue_photos?id=eq.${photoId}`, { method: "DELETE" }); if (photo?.storagePath && !/^https?:\/\//i.test(photo.storagePath)) await rest(`/storage/v1/object/issue-photos/${photo.storagePath.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" }); })().catch((err) => setError(err instanceof Error ? err.message : "照片刪除失敗")); },
     resetDemoData: async () => { await reload(); }, reload,
   }), [error, issues, loading, projectId]);
   return <IssuesContext.Provider value={value}>{children}</IssuesContext.Provider>;
