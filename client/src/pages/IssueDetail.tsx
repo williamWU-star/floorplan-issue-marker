@@ -27,7 +27,7 @@ function statusClass(status: IssueStatus) {
 export default function IssueDetail() {
   const [, params] = useRoute("/issues/:id");
   const [, navigate] = useLocation();
-  const { issues, updateIssue, deleteIssue, addPhotoFile, addExternalPhoto, removePhoto } = useIssues();
+  const { issues, updateIssue, deleteIssue, addPhotoFile, addExternalPhoto, removePhoto, floorplanUrl } = useIssues();
   const issue = issues.find((item) => item.id === params?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState("");
@@ -119,7 +119,7 @@ export default function IssueDetail() {
           </section>
 
           <aside className="detail-side">
-            <div className="side-card location-card"><div className="side-card-heading"><p className="eyebrow">PLAN REFERENCE</p><MapPin size={17} /></div><h3>圖面位置</h3><div className="mini-plan"><img src={FLOORPLAN_URL} alt="平面圖位置預覽" /><span className="mini-pin" style={{ left: `${issue.x}%`, top: `${issue.y}%` }} /></div><div className="coordinates"><span>X {issue.x.toFixed(1)}</span><span>Y {issue.y.toFixed(1)}</span><span className="mono">{issue.floor}</span></div><Link href="/" className="side-link">回到圖面查看 <ArrowUpRight size={14} /></Link></div>
+            <div className="side-card location-card"><div className="side-card-heading"><p className="eyebrow">PLAN REFERENCE</p><MapPin size={17} /></div><h3>圖面位置</h3><div className="mini-plan"><img src={floorplanUrl || FLOORPLAN_URL} alt={floorplanUrl ? "已上傳的房屋平面圖" : "平面圖位置預覽"} /><span className="mini-pin" style={{ left: `${issue.x}%`, top: `${issue.y}%` }} /></div><div className="coordinates"><span>X {issue.x.toFixed(1)}</span><span>Y {issue.y.toFixed(1)}</span><span className="mono">{issue.floor}</span></div><Link href="/" className="side-link">回到圖面查看 <ArrowUpRight size={14} /></Link></div>
             <div className="side-card"><div className="side-card-heading"><p className="eyebrow">WORKFLOW</p><ClipboardList size={17} /></div><h3>處理狀態</h3><div className="status-options">{statusOptions.map((status) => <button type="button" key={status} className={issue.status === status ? `status-option is-active ${statusClass(status)}` : "status-option"} onClick={() => updateIssue(issue.id, { status })}><span className="status-option-dot" />{status}{issue.status === status && <Check size={14} />}</button>)}</div><label className="side-label">優先級<select value={issue.severity} onChange={(event) => updateIssue(issue.id, { severity: event.target.value as IssueSeverity })}>{severityOptions.map((severity) => <option key={severity}>{severity}</option>)}</select></label></div>
             <div className="side-card note-editor"><div className="side-card-heading"><p className="eyebrow">FIELD NOTE</p><MoreHorizontal size={17} /></div><h3>檢查描述</h3><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={6} /><Button className="save-note" onClick={saveNote}>{saved ? <><Check size={15} />已保存</> : "保存描述"}</Button></div>
             <div className="danger-zone"><button type="button" onClick={() => setShowDelete(true)}><Trash2 size={14} />刪除這筆標註</button></div>

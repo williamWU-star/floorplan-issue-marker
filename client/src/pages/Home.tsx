@@ -23,6 +23,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Upload,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,7 @@ function severityClass(severity: IssueSeverity) {
 }
 
 export default function Home() {
-  const { issues, addIssue, resetDemoData } = useIssues();
+  const { issues, addIssue, resetDemoData, floorplanUrl, uploadFloorplan } = useIssues();
   const [, setLocation] = useLocation();
   const [activeFloor, setActiveFloor] = useState("全部");
   const [query, setQuery] = useState("");
@@ -69,6 +70,8 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  const floorplanInputRef = useRef<HTMLInputElement>(null);
+  const [floorplanUploading, setFloorplanUploading] = useState(false);
 
   const filteredIssues = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -96,6 +99,20 @@ export default function Home() {
   function selectIssue(issue: Issue) {
     setSelectedId(issue.id);
     setLocation(`/issues/${issue.id}`);
+  }
+
+  async function handleFloorplanUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setFloorplanUploading(true);
+    try {
+      await uploadFloorplan(file, "1F");
+    } catch (err) {
+      // Error is recorded in context's error state
+    } finally {
+      setFloorplanUploading(false);
+    }
   }
 
   function submitIssue(event: React.FormEvent<HTMLFormElement>) {
@@ -144,6 +161,8 @@ export default function Home() {
               <p className="lede">把問題留在它發生的位置，接上可以回看的現場證據。</p>
             </div>
             <div className="heading-actions">
+              <button type="button" className="text-action" disabled={floorplanUploading} onClick={() => floorplanInputRef.current?.click()}><Upload size={15} />{floorplanUploading ? "上傳中…" : "上傳平面圖"}</button>
+              <input ref={floorplanInputRef} type="file" accept="image/*" hidden onChange={handleFloorplanUpload} />
               <button type="button" className="text-action" onClick={() => setShowReset(true)}><RotateCcw size={15} />重設示範資料</button>
               <div className="legend"><span className="legend-pin" />{issues.length} 個標註</div>
             </div>
@@ -164,7 +183,7 @@ export default function Home() {
               <div className="plan-toolbar-right"><span className="north-label">N</span><span className="north-arrow">↗</span><span className="toolbar-coordinates mono">X 04.18 / Y 12.06</span></div>
             </div>
             <div ref={stageRef} className="plan-stage" onClick={handlePlanClick} role="application" aria-label="房屋平面圖，可點擊新增問題標註">
-              <img src={FLOORPLAN_URL} alt="包含 1F、2F、3F 的房屋平面圖" className="floorplan-image" />
+              <img src={floorplanUrl || FLOORPLAN_URL} alt={floorplanUrl ? "已上傳的房屋平面圖" : "包含 1F、2F、3F 的房屋平面圖"} className="floorplan-image" />
               <div className="plan-wash" />
               {filteredIssues.map((issue, index) => (
                 <button
