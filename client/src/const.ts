@@ -1,5 +1,11 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
+// Asset URLs — prefixed with BASE_URL so Vite adds the correct /repo-name/ path
+// in production (GitHub Pages) while staying at / in local dev.
+const ASSETS_BASE = import.meta.env.BASE_URL ?? "/";
+export const LOGO_URL = `${ASSETS_BASE}assets/surveyor-mark.png`;
+export const FLOORPLAN_URL = `${ASSETS_BASE}assets/floorplan-house.png`;
+
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;

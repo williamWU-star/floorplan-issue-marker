@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { MapPin, Camera, AlertTriangle } from "lucide-react";
 import { useRoute } from "wouter";
 import { SUPABASE_URL } from "@/lib/supabaseRest";
-
-const LOGO_URL = "/assets/surveyor-mark.png";
-const FLOORPLAN_URL = "/assets/floorplan-house.png";
+import { LOGO_URL, FLOORPLAN_URL } from "@/const";
 
 type ReportIssue = { id: string; code: string; title: string; location: string | null; x: number; y: number; severity: string; status: string; description: string | null; floor_id: string; photos: { id: string; caption: string | null; url: string }[] };
 type Report = { project: { id: string; name: string; address: string | null }; floors: { id: string; label: string; sort_order: number }[]; issues: ReportIssue[] };
