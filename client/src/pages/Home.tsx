@@ -8,26 +8,18 @@ import { Link } from "wouter";
 import {
   ArrowUpRight,
   Check,
-  ChevronDown,
   CircleHelp,
   Crosshair,
-  FileText,
-  Filter,
-  FolderOpen,
   Layers3,
-  LocateFixed,
   MapPin,
   MousePointer2,
   Plus,
   RotateCcw,
-  Search,
-  SlidersHorizontal,
   Sparkles,
   Upload,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useIssues, type Issue, type IssuePhoto, type IssueSeverity, type IssueStatus } from "@/contexts/IssuesContext";
 
@@ -62,7 +54,6 @@ function severityClass(severity: IssueSeverity) {
 export default function Home() {
   const { issues, addIssue, resetDemoData, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
   const [activeFloor, setActiveFloor] = useState("全部");
-  const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawMode, setDrawMode] = useState(false);
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
@@ -75,18 +66,10 @@ export default function Home() {
   const [floorplanUploading, setFloorplanUploading] = useState(false);
 
   const filteredIssues = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return issues.filter((issue) => {
-      const matchesFloor = activeFloor === "全部" || issue.floor === activeFloor;
-      const matchesQuery = !normalizedQuery || [issue.code, issue.title, issue.location, issue.description].some((value) => value.toLowerCase().includes(normalizedQuery));
-      return matchesFloor && matchesQuery;
-    });
-  }, [activeFloor, issues, query]);
+    return issues.filter((issue) => activeFloor === "全部" || issue.floor === activeFloor);
+  }, [activeFloor, issues]);
 
   const selectedIssue = issues.find((issue) => issue.id === selectedId) ?? null;
-  const completedCount = issues.filter((issue) => issue.status === "已完成").length;
-  const inProgressCount = issues.filter((issue) => issue.status === "處理中").length;
-  const pendingCount = issues.filter((issue) => issue.status === "待處理").length;
 
   function handlePlanClick(event: MouseEvent<HTMLDivElement>) {
     if (!drawMode || !stageRef.current) return;
@@ -223,39 +206,25 @@ export default function Home() {
           </div>
         </section>
 
-        <aside className="issue-rail" aria-label="問題索引">
-          <div className="rail-header">
-            <div><p className="eyebrow">INDEX / {String(filteredIssues.length).padStart(2, "0")}</p><h2>問題索引</h2></div>
-            <div className="rail-header-icon"><FileText size={20} /></div>
-          </div>
-          <div className="rail-stats">
-            <div><strong>{pendingCount}</strong><span>待處理</span></div>
-            <div><strong>{inProgressCount}</strong><span>處理中</span></div>
-            <div><strong>{completedCount}</strong><span>已完成</span></div>
-          </div>
-          <div className="search-wrap"><Search size={16} /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋編號、位置或描述" aria-label="搜尋問題" /></div>
-          <div className="rail-filter"><Filter size={14} /><span>{activeFloor === "全部" ? "全棟問題" : `${activeFloor} 問題`}</span><ChevronDown size={15} /></div>
-          <div className="issue-list">
-            {filteredIssues.length === 0 ? (
-              <div className="empty-state"><SlidersHorizontal size={26} /><strong>沒有符合的紀錄</strong><span>換一個樓層或搜尋詞試試。</span></div>
-            ) : filteredIssues.map((issue) => (
-              <article key={issue.id} className={selectedId === issue.id ? "issue-card is-selected" : "issue-card"} onClick={() => setSelectedId(issue.id)}>
-                <div className="issue-card-top"><span className="issue-code mono">{issue.code}</span><span className={`severity-tag ${severityClass(issue.severity)}`}>{severityLabel[issue.severity]}</span></div>
-                <h3>{issue.title}</h3>
-                <p className="issue-location"><MapPin size={13} />{issue.location}</p>
-                <p className="issue-description">{issue.description}</p>
-                {selectedId === issue.id && issue.photos.length > 0 && (
-                  <div className="issue-photos">
-                    {issue.photos.map((photo) => (
-                      <button key={photo.id} type="button" className="issue-photo-thumb" onClick={(event) => { event.stopPropagation(); setEnlargedPhoto(photo); }} aria-label={`放大照片：${photo.caption}`}><img src={photo.url} alt={photo.caption} /></button>
-                    ))}
-                  </div>
-                )}
-                <div className="issue-card-bottom"><span className={`status-badge ${statusClass(issue.status)}`}><span />{statusLabel[issue.status]}</span><Link href={`/issues/${issue.id}`} className="card-link" onClick={(event) => event.stopPropagation()}>查看紀錄 <ArrowUpRight size={14} /></Link></div>
-              </article>
-            ))}
-          </div>
-          <div className="rail-footer"><FolderOpen size={15} /><span>本機保存 · localStorage</span></div>
+        <aside className="issue-detail-panel" aria-label="問題詳情">
+          {selectedIssue ? (
+            <article className="issue-detail">
+              <div className="issue-detail-top"><span className="issue-code mono">{selectedIssue.code}</span><span className={`severity-tag ${severityClass(selectedIssue.severity)}`}>{severityLabel[selectedIssue.severity]}</span></div>
+              <h3 className="issue-detail-title">{selectedIssue.title}</h3>
+              <p className="detail-location"><MapPin size={13} />{selectedIssue.location}</p>
+              <p className="issue-description detail-description">{selectedIssue.description}</p>
+              {selectedIssue.photos.length > 0 && (
+                <div className="photo-scroll-area">
+                  {selectedIssue.photos.map((photo) => (
+                    <button key={photo.id} type="button" className="issue-photo-thumb" onClick={() => setEnlargedPhoto(photo)} aria-label={`放大照片：${photo.caption}`}><img src={photo.url} alt={photo.caption} /></button>
+                  ))}
+                </div>
+              )}
+              <div className="issue-detail-bottom"><span className={`status-badge ${statusClass(selectedIssue.status)}`}><span />{statusLabel[selectedIssue.status]}</span><Link href={`/issues/${selectedIssue.id}`} className="card-link" onClick={() => setEnlargedPhoto(null)}>查看紀錄 <ArrowUpRight size={14} /></Link></div>
+            </article>
+          ) : (
+            <div className="detail-placeholder"><MapPin size={24} /><p>點擊定位釘查看問題詳情</p></div>
+          )}
         </aside>
       </main>
 
