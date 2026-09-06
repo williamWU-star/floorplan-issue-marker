@@ -8,7 +8,8 @@ export type Issue = { id: string; code: string; title: string; floor: string; lo
 type DbIssue = { id: string; code: string; title: string; location: string | null; x: number; y: number; severity: string; status: string; description: string | null; created_at: string; floor_id: string };
 type DbFloor = { id: string; label: string };
 type DbPhoto = { id: string; issue_id: string; storage_path: string; caption: string | null; created_at: string };
-type IssuesContextValue = { issues: Issue[]; loading: boolean; error: string | null; projectId: string | null; addIssue: (input: Omit<Issue, "id" | "code" | "createdAt" | "photos">) => Issue; updateIssue: (id: string, patch: Partial<Issue>) => void; deleteIssue: (id: string) => void; addPhoto: (issueId: string, photo: IssuePhoto) => void; addPhotoFile: (issueId: string, file: File, caption?: string) => Promise<void>; addExternalPhoto: (issueId: string, url: string, caption?: string) => Promise<void>; removePhoto: (issueId: string, photoId: string) => void; resetDemoData: () => Promise<void>; reload: () => Promise<void> };
+type DbFloorplanAsset = { id: string; floor_id: string; storage_path: string; width: number | null; height: number | null; version: number; created_at: string };
+type IssuesContextValue = { issues: Issue[]; loading: boolean; error: string | null; projectId: string | null; floorplanUrl: string | null; floorplanAssetId: string | null; addIssue: (input: Omit<Issue, "id" | "code" | "createdAt" | "photos">) => Issue; updateIssue: (id: string, patch: Partial<Issue>) => void; deleteIssue: (id: string) => void; addPhoto: (issueId: string, photo: IssuePhoto) => void; addPhotoFile: (issueId: string, file: File, caption?: string) => Promise<void>; addExternalPhoto: (issueId: string, url: string, caption?: string) => Promise<void>; removePhoto: (issueId: string, photoId: string) => void; uploadFloorplan: (file: File, floorLabel?: string) => Promise<void>; resetDemoData: () => Promise<void>; reload: () => Promise<void> };
 const IssuesContext = createContext<IssuesContextValue | null>(null);
 const severityToDb: Record<IssueSeverity, string> = { 高: "high", 中: "medium", 低: "low" };
 const statusToDb: Record<IssueStatus, string> = { 待處理: "pending", 處理中: "in_progress", 已完成: "done" };
@@ -21,7 +22,7 @@ async function loadProject() {
 function mapIssue(row: DbIssue, floorMap: Map<string, string>, photos: IssuePhoto[]): Issue { return { id: row.id, code: row.code, title: row.title, floor: floorMap.get(row.floor_id) || "1F", location: row.location || "未指定位置", x: Number(row.x) * 100, y: Number(row.y) * 100, severity: dbToSeverity[row.severity] || "中", status: dbToStatus[row.status] || "待處理", description: row.description || "", createdAt: row.created_at.slice(0, 10), photos }; }
 
 export function IssuesProvider({ children }: { children: ReactNode }) {
-  const [issues, setIssues] = useState<Issue[]>([]); const [projectId, setProjectId] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);
+  const [issues, setIssues] = useState<Issue[]>([]); const [projectId, setProjectId] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const [floorplanUrl, setFloorplanUrl] = useState<string | null>(null); const [floorplanAssetId, setFloorplanAssetId] = useState<string | null>(null);
   const reload = async () => {
     setLoading(true); setError(null);
     try {
@@ -40,12 +41,26 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
         } catch { /* ignore missing photo */ }
       }
       setIssues(rows.map((row) => mapIssue(row, floorMap, grouped.get(row.id) || [])));
+
+      // Load the latest floorplan asset for this project
+      const assetRows = floors.length ? await rest(`/rest/v1/floorplan_assets?select=id,floor_id,storage_path,width,height,version,created_at&floor_id=in.(${floors.map((f) => f.id).join(",")})&order=created_at.desc`) as DbFloorplanAsset[] : [];
+      if (assetRows.length > 0) {
+        const latest = assetRows[0];
+        try {
+          const url = await signStorageUrl("floorplan-assets", latest.storage_path, 3600);
+          setFloorplanUrl(url);
+          setFloorplanAssetId(latest.id);
+        } catch { /* ignore missing floorplan */ }
+      } else {
+        setFloorplanUrl(null);
+        setFloorplanAssetId(null);
+      }
     } catch (err) { setError(err instanceof Error ? err.message : "資料載入失敗"); } finally { setLoading(false); }
   };
   useEffect(() => { void reload(); }, []);
 
   const value = useMemo<IssuesContextValue>(() => ({
-    issues, loading, error, projectId,
+    issues, loading, error, projectId, floorplanUrl, floorplanAssetId,
     addIssue: (input) => {
       const temporary: Issue = { ...input, id: `pending-${Date.now()}`, code: `${input.floor}-NEW`, createdAt: new Date().toISOString().slice(0, 10), photos: [] };
       setIssues((list) => [temporary, ...list]);
@@ -74,9 +89,22 @@ export function IssuesProvider({ children }: { children: ReactNode }) {
       await rest("/rest/v1/issue_photos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ issue_id: issueId, storage_path: normalized, caption: caption?.trim() || "外部照片", uploaded_by: null }) });
       await reload();
     },
+    uploadFloorplan: async (file, floorLabel = "1F") => {
+      if (!projectId) throw new Error("尚未準備好專案");
+      const floors = await rest(`/rest/v1/floors?select=id,label&project_id=eq.${projectId}&label=eq.${encodeURIComponent(floorLabel)}`) as DbFloor[];
+      const floor = floors[0];
+      if (!floor) throw new Error(`找不到樓層 ${floorLabel}`);
+      const path = `${projectId}/${floor.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      await uploadStorageFile("floorplan-assets", path, file);
+      let width: number | null = null;
+      let height: number | null = null;
+      try { const bitmap = await createImageBitmap(file); width = bitmap.width; height = bitmap.height; } catch { /* ignore dimension extraction failure */ }
+      await rest("/rest/v1/floorplan_assets", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ floor_id: floor.id, storage_path: path, width, height, version: 1, created_by: null }) });
+      await reload();
+    },
     removePhoto: (issueId, photoId) => { const photo = issues.find((item) => item.id === issueId)?.photos.find((p) => p.id === photoId); setIssues((list) => list.map((item) => item.id === issueId ? { ...item, photos: item.photos.filter((p) => p.id !== photoId) } : item)); void (async () => { await rest(`/rest/v1/issue_photos?id=eq.${photoId}`, { method: "DELETE" }); if (photo?.storagePath && !/^https?:\/\//i.test(photo.storagePath)) await rest(`/storage/v1/object/issue-photos/${photo.storagePath.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" }); })().catch((err) => setError(err instanceof Error ? err.message : "照片刪除失敗")); },
     resetDemoData: async () => { await reload(); }, reload,
-  }), [error, issues, loading, projectId]);
+  }), [error, issues, loading, projectId, floorplanUrl, floorplanAssetId]);
   return <IssuesContext.Provider value={value}>{children}</IssuesContext.Provider>;
 }
 export function useIssues() { const context = useContext(IssuesContext); if (!context) throw new Error("useIssues must be used inside IssuesProvider"); return context; }
