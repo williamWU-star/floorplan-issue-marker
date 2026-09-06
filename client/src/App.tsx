@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Router as WouterRouter, Switch, Redirect } from "wouter";
+import { Route, Router as WouterRouter, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -14,9 +13,10 @@ import ShareReport from "./pages/ShareReport";
 
 function AdminRouter() {
   const { session, loading } = useAuth();
-  const [path] = useState(() => window.location.pathname.replace(import.meta.env.BASE_URL, "/").replace(/\/$/, "") || "/");
+  const path = window.location.pathname.replace(import.meta.env.BASE_URL, "/").replace(/\/$/, "") || "/";
+  const isPublicShare = path.startsWith("/share/");
   if (loading) return <div className="not-found-page"><p className="eyebrow">SITE / TRACE</p><h1>正在開啟檢查檔案…</h1></div>;
-  if (!session && path !== "/share") return <Login />;
+  if (!session && !isPublicShare) return <Login />;
 
   return (
     <WouterRouter base={import.meta.env.BASE_URL}>
