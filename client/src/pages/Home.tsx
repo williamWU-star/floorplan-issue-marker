@@ -15,7 +15,6 @@ import {
   MousePointer2,
   Plus,
   RotateCcw,
-  Sparkles,
   Upload,
   X,
 } from "lucide-react";
@@ -25,7 +24,6 @@ import { useIssues, type Issue, type IssuePhoto, type IssueSeverity, type IssueS
 
 const FLOORPLAN_URL = "/assets/floorplan-house.png";
 const LOGO_URL = "/assets/surveyor-mark.png";
-const COMPASS_URL = "/assets/field-note-compass.png";
 
 const statusLabel: Record<IssueStatus, string> = {
   待處理: "待處理",
@@ -195,14 +193,6 @@ export default function Home() {
                 {drawMode ? <X size={16} /> : <Plus size={16} />}{drawMode ? "取消新增" : "新增標註"}
               </button>
             </div>
-          </div>
-
-          <div className="lower-notes">
-            <div className="note-card accent-note">
-              <div className="note-card-mark"><Sparkles size={16} /></div>
-              <div><p className="eyebrow">FIELD NOTE</p><p>目前顯示的是瀏覽器內的檢查紀錄。新增照片後，資料會保存在此瀏覽器，適合在 GitHub Pages 上作為個人工作簿使用。</p></div>
-            </div>
-            <img src={COMPASS_URL} alt="測量工具與建築圖面線稿裝飾" className="compass-illustration" />
           </div>
         </section>
 
