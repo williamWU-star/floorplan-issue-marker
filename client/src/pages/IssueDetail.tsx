@@ -27,12 +27,14 @@ function statusClass(status: IssueStatus) {
 export default function IssueDetail() {
   const [, params] = useRoute("/issues/:id");
   const [, navigate] = useLocation();
-  const { issues, updateIssue, deleteIssue, addPhotoFile, removePhoto } = useIssues();
+  const { issues, updateIssue, deleteIssue, addPhotoFile, addExternalPhoto, removePhoto } = useIssues();
   const issue = issues.find((item) => item.id === params?.id);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoUrl, setPhotoUrl] = useState("");
   const [photoCaption, setPhotoCaption] = useState("");
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [externalPhotoAdding, setExternalPhotoAdding] = useState(false);
+  const [externalPhotoError, setExternalPhotoError] = useState("");
   const [note, setNote] = useState(issue?.description ?? "");
   const [saved, setSaved] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -67,14 +69,24 @@ export default function IssueDetail() {
     }
   }
 
-  function addExternalPhoto(event: React.FormEvent<HTMLFormElement>) {
+  async function addExternalPhoto(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!photoUrl.trim()) return;
-    // External URLs are intentionally kept as a separate manual path.
-    // This temporary mode stores uploaded evidence in Supabase; external URLs
-    // remain available for public images supplied by the user.
-    setPhotoUrl("");
-    setPhotoCaption("");
+    setExternalPhotoError("");
+    const url = photoUrl.trim();
+    if (!url) {
+      setExternalPhotoError("請先輸入照片網址。");
+      return;
+    }
+    setExternalPhotoAdding(true);
+    try {
+      await addExternalPhoto(record.id, url, photoCaption.trim() || "外部照片");
+      setPhotoUrl("");
+      setPhotoCaption("");
+    } catch (err) {
+      setExternalPhotoError(err instanceof Error ? err.message : "加入外部照片失敗");
+    } finally {
+      setExternalPhotoAdding(false);
+    }
   }
 
   function removeIssue() {
@@ -103,7 +115,7 @@ export default function IssueDetail() {
               <div className="photo-grid">{issue.photos.map((photo, index) => <figure className="photo-card" key={photo.id}><div className="photo-frame"><img src={photo.url} alt={photo.caption} /><button type="button" className="photo-remove" onClick={() => removePhoto(issue.id, photo.id)} aria-label={`刪除照片 ${index + 1}`}><Trash2 size={14} /></button></div><figcaption><span className="mono">{String(index + 1).padStart(2, "0")}</span>{photo.caption}</figcaption></figure>)}</div>
             )}
 
-            <div className="evidence-add"><div className="evidence-add-title"><FilePlus2 size={17} /><strong>加入外部照片網址</strong></div><p>適合使用已上傳到圖片服務或 GitHub 的公開圖片連結。</p><form onSubmit={addExternalPhoto} className="external-photo-form"><input type="url" value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} placeholder="https://…" aria-label="外部照片網址" /><input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="照片說明（選填）" aria-label="照片說明" /><Button type="submit" variant="outline"><ExternalLink size={15} />加入</Button></form></div>
+            <div className="evidence-add"><div className="evidence-add-title"><FilePlus2 size={17} /><strong>加入外部照片網址</strong></div><p>適合使用已上傳到圖片服務或 GitHub 的公開圖片連結。</p><form onSubmit={addExternalPhoto} className="external-photo-form"><input type="url" value={photoUrl} onChange={(event) => { setPhotoUrl(event.target.value); setExternalPhotoError(""); }} placeholder="https://…" aria-label="外部照片網址" disabled={externalPhotoAdding} /><input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="照片說明（選填）" aria-label="照片說明" disabled={externalPhotoAdding} /><Button type="submit" variant="outline" disabled={externalPhotoAdding}>{externalPhotoAdding ? "加入中…" : <><ExternalLink size={15} />加入</>}</Button></form>{externalPhotoError && <p role="alert" className="form-error">{externalPhotoError}</p>}</div>
           </section>
 
           <aside className="detail-side">
