@@ -6,7 +6,7 @@
 
 ## 1. 建立 Supabase 專案
 
-前往 [Supabase Dashboard](https://supabase.com/dashboard)，建立一個新的 project。若必須維持免費，選擇 Free Plan，並記下 project region。建議專案名稱使用 `house-report`，方便與 GitHub repository 對應。
+前往 [Supabase Dashboard](https://supabase.com/dashboard)，建立一個新的 project。若必須維持免費，選擇 Free Plan，並記下 project region。建議專案名稱使用 `floorplan-issue-marker`，方便與 GitHub repository 對應。
 
 建立完成後，在 **Project Settings → API** 找到：
 
