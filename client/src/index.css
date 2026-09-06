@@ -242,6 +242,7 @@ h3 { color: var(--ink); }
 .external-photo-form input:first-child { flex: 2; }
 .external-photo-form input:nth-child(2) { flex: 1; }
 .external-photo-form button { flex: 0 0 auto; border-radius: 2px; }
+.form-error { margin-top: 6px; color: #9f2d2d; font-size: 11px; }
 .detail-side { display: flex; flex-direction: column; gap: 15px; }
 .side-card { padding: 17px; border: 1px solid rgba(27,36,36,.18); background: rgba(251,250,246,.72); }
 .side-card-heading { justify-content: space-between; color: var(--copper); }

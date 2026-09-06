@@ -69,7 +69,7 @@ export default function IssueDetail() {
     }
   }
 
-  async function addExternalPhoto(event: React.FormEvent<HTMLFormElement>) {
+  async function handleAddExternalPhoto(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setExternalPhotoError("");
     const url = photoUrl.trim();
@@ -115,7 +115,7 @@ export default function IssueDetail() {
               <div className="photo-grid">{issue.photos.map((photo, index) => <figure className="photo-card" key={photo.id}><div className="photo-frame"><img src={photo.url} alt={photo.caption} /><button type="button" className="photo-remove" onClick={() => removePhoto(issue.id, photo.id)} aria-label={`刪除照片 ${index + 1}`}><Trash2 size={14} /></button></div><figcaption><span className="mono">{String(index + 1).padStart(2, "0")}</span>{photo.caption}</figcaption></figure>)}</div>
             )}
 
-            <div className="evidence-add"><div className="evidence-add-title"><FilePlus2 size={17} /><strong>加入外部照片網址</strong></div><p>適合使用已上傳到圖片服務或 GitHub 的公開圖片連結。</p><form onSubmit={addExternalPhoto} className="external-photo-form"><input type="url" value={photoUrl} onChange={(event) => { setPhotoUrl(event.target.value); setExternalPhotoError(""); }} placeholder="https://…" aria-label="外部照片網址" disabled={externalPhotoAdding} /><input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="照片說明（選填）" aria-label="照片說明" disabled={externalPhotoAdding} /><Button type="submit" variant="outline" disabled={externalPhotoAdding}>{externalPhotoAdding ? "加入中…" : <><ExternalLink size={15} />加入</>}</Button></form>{externalPhotoError && <p role="alert" className="form-error">{externalPhotoError}</p>}</div>
+            <div className="evidence-add"><div className="evidence-add-title"><FilePlus2 size={17} /><strong>加入外部照片網址</strong></div><p>適合使用已上傳到圖片服務或 GitHub 的公開圖片連結。</p><form onSubmit={handleAddExternalPhoto} className="external-photo-form"><input type="url" value={photoUrl} onChange={(event) => { setPhotoUrl(event.target.value); setExternalPhotoError(""); }} placeholder="https://…" aria-label="外部照片網址" disabled={externalPhotoAdding} /><input value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="照片說明（選填）" aria-label="照片說明" disabled={externalPhotoAdding} /><Button type="submit" variant="outline" disabled={externalPhotoAdding}>{externalPhotoAdding ? "加入中…" : <><ExternalLink size={15} />加入</>}</Button></form>{externalPhotoError && <p role="alert" className="form-error">{externalPhotoError}</p>}</div>
           </section>
 
           <aside className="detail-side">
