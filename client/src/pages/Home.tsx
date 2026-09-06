@@ -4,7 +4,7 @@
  * accent; every other color exists to explain status or floor context.
  */
 import { useMemo, useRef, useState, type MouseEvent } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import {
   ArrowUpRight,
   Check,
@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useIssues, type Issue, type IssueSeverity, type IssueStatus } from "@/contexts/IssuesContext";
+import { useIssues, type Issue, type IssuePhoto, type IssueSeverity, type IssueStatus } from "@/contexts/IssuesContext";
 
 const FLOORPLAN_URL = "/assets/floorplan-house.png";
 const LOGO_URL = "/assets/surveyor-mark.png";
@@ -61,7 +61,6 @@ function severityClass(severity: IssueSeverity) {
 
 export default function Home() {
   const { issues, addIssue, resetDemoData, floorplanUrl, uploadFloorplan, error: contextError } = useIssues();
-  const [, setLocation] = useLocation();
   const [activeFloor, setActiveFloor] = useState("全部");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -70,6 +69,7 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [floorplanUploadError, setFloorplanUploadError] = useState("");
+  const [enlargedPhoto, setEnlargedPhoto] = useState<IssuePhoto | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const floorplanInputRef = useRef<HTMLInputElement>(null);
   const [floorplanUploading, setFloorplanUploading] = useState(false);
@@ -99,7 +99,6 @@ export default function Home() {
 
   function selectIssue(issue: Issue) {
     setSelectedId(issue.id);
-    setLocation(`/issues/${issue.id}`);
   }
 
   async function handleFloorplanUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -245,6 +244,13 @@ export default function Home() {
                 <h3>{issue.title}</h3>
                 <p className="issue-location"><MapPin size={13} />{issue.location}</p>
                 <p className="issue-description">{issue.description}</p>
+                {selectedId === issue.id && issue.photos.length > 0 && (
+                  <div className="issue-photos">
+                    {issue.photos.map((photo) => (
+                      <button key={photo.id} type="button" className="issue-photo-thumb" onClick={(event) => { event.stopPropagation(); setEnlargedPhoto(photo); }} aria-label={`放大照片：${photo.caption}`}><img src={photo.url} alt={photo.caption} /></button>
+                    ))}
+                  </div>
+                )}
                 <div className="issue-card-bottom"><span className={`status-badge ${statusClass(issue.status)}`}><span />{statusLabel[issue.status]}</span><Link href={`/issues/${issue.id}`} className="card-link" onClick={(event) => event.stopPropagation()}>查看紀錄 <ArrowUpRight size={14} /></Link></div>
               </article>
             ))}
@@ -252,6 +258,16 @@ export default function Home() {
           <div className="rail-footer"><FolderOpen size={15} /><span>本機保存 · localStorage</span></div>
         </aside>
       </main>
+
+      {enlargedPhoto && (
+        <div className="photo-overlay" onClick={() => setEnlargedPhoto(null)}>
+          <div className="photo-overlay-content" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setEnlargedPhoto(null)} aria-label="關閉"><X size={24} /></button>
+            <img src={enlargedPhoto.url} alt={enlargedPhoto.caption} className="photo-overlay-image" />
+            <p className="photo-overlay-caption">{enlargedPhoto.caption}</p>
+          </div>
+        </div>
+      )}
 
       {pendingPoint && (
         <div className="modal-backdrop" role="presentation">
